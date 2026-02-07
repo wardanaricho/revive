@@ -95,4 +95,41 @@ class SuratKontrolBpjsService
 
         return $result;
     }
+
+    public function deleteSuratKontrol(string $noSuratKontrol, string $user): array
+    {
+        $url = $this->bpjs->getBaseUrl() . "/RencanaKontrol/Delete";
+
+        $payload = [
+            "request" => [
+                "t_suratkontrol" => [
+                    "noSuratKontrol" => $noSuratKontrol,
+                    "user" => $user
+                ]
+            ]
+        ];
+
+        $response = Http::withHeaders(
+            $this->bpjs->getHeaders()
+        )
+            ->withBody(
+                json_encode($payload),
+                'Application/x-www-form-urlencoded'
+            )
+            ->send('DELETE', $url);
+
+        $result = $response->json();
+
+        // decrypt response BPJS
+        if (isset($result['response'])) {
+
+            $decrypted = $this->bpjs->decrypt(
+                $result['response']
+            );
+
+            $result['response'] = json_decode($decrypted, true);
+        }
+
+        return $result;
+    }
 }
