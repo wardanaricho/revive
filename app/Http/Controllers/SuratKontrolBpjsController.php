@@ -101,8 +101,80 @@ class SuratKontrolBpjsController extends Controller
         }
     }
 
+    public function updateSuratKontrol(Request $request)
+    {
+        $request->validate([
+            'noSEP' => 'required',
+            'kodeDokter' => 'required',
+            'poliKontrol' => 'required',
+            'tglRencanaKontrol' => 'required|date',
+            'user' => 'required'
+        ]);
+
+        $result = $this->service->updateSuratKontrol($request);
+
+        if (
+            !isset($result['metaData']) ||
+            $result['metaData']['code'] != 200
+        ) {
+
+            return response()->json([
+                'success' => false,
+                'message' => $result['metaData']['message'] ?? 'Gagal insert ke BPJS',
+                'bpjs_response' => $result
+            ], 400);
+        }
+
+        $resp = $result['response'];
+
+        DB::connection('mysql_2')->beginTransaction();
+        try {
+            $nm_poli_bpjs = DB::connection('mysql_2')
+                ->table('maping_poli_bpjs')
+                ->where('kd_poli_bpjs', $request->poliKontrol)
+                ->value('nm_poli_bpjs');
+
+            DB::connection('mysql_2')
+                ->table('bridging_surat_kontrol_bpjs')
+                ->where('no_surat', $request->noSuratKontrol)
+                ->update([
+                    'no_sep' => $request->noSEP,
+                    'tgl_surat' => now()->toDateString(),
+                    'no_surat' => $resp['noSuratKontrol'],
+                    'tgl_rencana' => $resp['tglRencanaKontrol'],
+                    'kd_dokter_bpjs' => $request->kodeDokter,
+                    'nm_dokter_bpjs' => $resp['namaDokter'],
+                    'kd_poli_bpjs' => $request->poliKontrol,
+                    'nm_poli_bpjs' => $nm_poli_bpjs,
+                ]);
+
+            DB::connection('mysql_2')->commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Surat kontrol berhasil dibuat & disimpan',
+                'data' => $resp
+
+            ]);
+        } catch (\Exception $e) {
+            DB::connection('mysql_2')->rollBack();
+            Log::error('Insert Surat Kontrol gagal', [
+                'error' => $e->getMessage(),
+                'request' => $request->all(),
+                'bpjs_response' => $result
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Gagal menyimpan ke database',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
     public function deleteSuratKontrol(Request $request): JsonResponse
     {
+        // dd($request->all());
         $request->validate([
             'noSuratKontrol' => 'required',
             'user' => 'required'
@@ -111,7 +183,7 @@ class SuratKontrolBpjsController extends Controller
         $noSuratKontrol = $request->noSuratKontrol;
         $user = $request->user;
 
-        // hit BPJS
+
         $result = $this->service->deleteSuratKontrol(
             $noSuratKontrol,
             $user
